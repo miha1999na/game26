@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>キラキラ☆フルーツキャッチ（虫注意！）</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #e0f7fa;
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+
+        /* 背景装飾 */
+        .background-elements {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .hill {
+            position: absolute;
+            bottom: -50px;
+            width: 120%;
+            height: 200px;
+            background: #a5d6a7;
+            border-radius: 50%;
+            left: -10%;
+        }
+        .cloud {
+            position: absolute;
+            background: white;
+            border-radius: 50px;
+            opacity: 0.8;
+            animation: float 25s infinite linear;
+        }
+        .cloud::after, .cloud::before {
+            content: '';
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+        }
+        .cloud:nth-child(1) { width: 100px; height: 40px; top: 10%; left: -150px; }
+        .cloud:nth-child(1)::after { width: 50px; height: 50px; top: -20px; left: 15px; }
+        .cloud:nth-child(1)::before { width: 40px; height: 40px; top: -15px; left: 45px; }
+        
+        .cloud:nth-child(2) { width: 120px; height: 45px; top: 25%; left: -200px; animation-delay: 7s; }
+        .cloud:nth-child(2)::after { width: 60px; height: 60px; top: -25px; left: 20px; }
+        .cloud:nth-child(2)::before { width: 50px; height: 50px; top: -20px; left: 55px; }
+
+        @keyframes float {
+            from { transform: translateX(-200px); }
+            to { transform: translateX(calc(100vw + 400px)); }
+        }
+
+        /* UI設定 */
+        #ui {
+            position: absolute;
+            top: 25px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .ui-text {
+            font-size: 32px;
+            font-weight: 900;
+            color: #ff80ab;
+            text-shadow: 
+                3px 3px 0 #fff,
+                -1px -1px 0 #fff,  
+                1px -1px 0 #fff,
+                -1px 1px 0 #fff,
+                1px 1px 0 #fff;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.6);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        h1 { 
+            color: #ff4081; 
+            font-size: 42px; 
+            margin-bottom: 5px;
+            text-shadow: 2px 2px white;
+            text-align: center;
+        }
+        .score-info { font-size: 18px; margin-bottom: 30px; color: #555; text-align: center; }
+        
+        button {
+            padding: 18px 60px;
+            font-size: 26px;
+            background: #ff4081;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            box-shadow: 0 6px #c60055;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:active { transform: translateY(3px); box-shadow: 0 3px #c60055; }
+
+        canvas { display: block; position: relative; z-index: 2; }
+
+        .shake { animation: shake 0.2s ease-in-out; }
+        @keyframes shake {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(0.95); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="background-elements">
+        <div class="cloud"></div>
+        <div class="cloud"></div>
+        <div class="hill"></div>
+    </div>
+
+    <div id="ui">
+        <div class="ui-text">スコア: <span id="scoreVal">0</span></div>
+        <div class="ui-text">あと: <span id="timeVal">60</span>秒</div>
+    </div>
+
+    <div id="overlay">
+        <h1>フルーツキャッチ♪</h1>
+        <p class="score-info">果物はのんびり、虫は早いよ！<br>ハエ（🪰）をよけてね！</p>
+        <button id="startBtn">スタート！</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('scoreVal');
+        const timeElement = document.getElementById('timeVal');
+        const overlay = document.getElementById('overlay');
+        const startBtn = document.getElementById('startBtn');
+        const msg = document.querySelector('#overlay h1');
+
+        let score = 0;
+        let timeLeft = 60;
+        let gameActive = false;
+        let items = [];
+        
+        let basket = { x: 0, y: 0, w: 140, h: 70 };
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            basket.y = canvas.height - 130;
+            basket.x = (canvas.width - basket.w) / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function handleMove(e) {
+            if (!gameActive) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            basket.x = clientX - (basket.w / 2);
+            if (basket.x < 0) basket.x = 0;
+            if (basket.x > canvas.width - basket.w) basket.x = canvas.width - basket.w;
+        }
+
+        window.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, {passive: false});
+        window.addEventListener('mousemove', handleMove);
+
+        function spawnItem() {
+            if (!gameActive) return;
+            const isBug = Math.random() < 0.15; // 虫の確率
+            const fruits = ["🍎", "🍊", "🍇", "🍌", "🍓", "🍍", "🍉", "🍒", "🍑"];
+            
+            let itemSpeed;
+            if (isBug) {
+                // --- 虫（ハエ）は素早く落ちる設定 ---
+                itemSpeed = 5.5 + Math.random() * 2 + (60 - timeLeft) / 10;
+            } else {
+                // --- 果物はゆっくり落ちる設定 ---
+                itemSpeed = 2.5 + Math.random() * 2 + (60 - timeLeft) / 20;
+            }
+
+            items.push({
+                x: Math.random() * (canvas.width - 60),
+                y: -60,
+                content: isBug ? "🪰" : fruits[Math.floor(Math.random() * fruits.length)],
+                type: isBug ? 'bug' : 'fruit',
+                speed: itemSpeed
+            });
+            
+            const nextSpawn = Math.max(350, 850 - (60 - timeLeft) * 5);
+            setTimeout(spawnItem, nextSpawn);
+        }
+
+        function update() {
+            if (!gameActive) return;
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                item.y += item.speed;
+                if (item.y + 30 > basket.y && item.y < basket.y + basket.h &&
+                    item.x + 10 > basket.x && item.x < basket.x + basket.w - 10) {
+                    if (item.type === 'fruit') {
+                        score += 10;
+                    } else {
+                        score = Math.max(0, score - 50);
+                        document.body.classList.add('shake');
+                        setTimeout(() => document.body.classList.remove('shake'), 200);
+                    }
+                    scoreElement.innerText = score;
+                    items.splice(i, 1);
+                    continue;
+                }
+                if (item.y > canvas.height) items.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // かご
+            ctx.save();
+            ctx.fillStyle = "#f06292"; 
+            ctx.beginPath();
+            ctx.roundRect(basket.x, basket.y, basket.w, basket.h, 15);
+            ctx.fill();
+            ctx.fillStyle = "#e91e63";
+            ctx.fillRect(basket.x - 5, basket.y - 5, basket.w + 10, 15);
+            ctx.restore();
+
+            ctx.textAlign = "center";
+            items.forEach(item => {
+                ctx.font = "50px Arial";
+                ctx.fillText(item.content, item.x + 30, item.y + 30);
+            });
+
+            if (gameActive) {
+                requestAnimationFrame(() => { update(); draw(); });
+            } else {
+                requestAnimationFrame(draw);
+            }
+        }
+
+        function timer() {
+            if (!gameActive) return;
+            timeLeft--;
+            timeElement.innerText = timeLeft;
+            if (timeLeft <= 0) {
+                gameActive = false;
+                overlay.style.display = 'flex';
+                msg.innerHTML = "タイムアップ！<br><span style='font-size:30px'>スコア: " + score + "</span>";
+                startBtn.innerText = "もう一回！";
+            } else {
+                setTimeout(timer, 1000);
+            }
+        }
+
+        startBtn.addEventListener('click', () => {
+            score = 0; timeLeft = 60; items = [];
+            scoreElement.innerText = score;
+            timeElement.innerText = timeLeft;
+            gameActive = true;
+            overlay.style.display = 'none';
+            spawnItem(); timer(); draw();
+        });
+    </script>
+</body>
+</html>
