@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>キラキラ☆フルーツキャッチ（虫注意！）</title>
+    <title>キラキラ☆フルーツキャッチ（パニックモード！）</title>
     <style>
         body {
             margin: 0;
@@ -14,7 +14,6 @@
             user-select: none;
         }
 
-        /* 背景装飾 */
         .background-elements {
             position: absolute;
             width: 100%;
@@ -38,26 +37,14 @@
             opacity: 0.8;
             animation: float 25s infinite linear;
         }
-        .cloud::after, .cloud::before {
-            content: '';
-            position: absolute;
-            background: white;
-            border-radius: 50%;
-        }
         .cloud:nth-child(1) { width: 100px; height: 40px; top: 10%; left: -150px; }
-        .cloud:nth-child(1)::after { width: 50px; height: 50px; top: -20px; left: 15px; }
-        .cloud:nth-child(1)::before { width: 40px; height: 40px; top: -15px; left: 45px; }
-        
         .cloud:nth-child(2) { width: 120px; height: 45px; top: 25%; left: -200px; animation-delay: 7s; }
-        .cloud:nth-child(2)::after { width: 60px; height: 60px; top: -25px; left: 20px; }
-        .cloud:nth-child(2)::before { width: 50px; height: 50px; top: -20px; left: 55px; }
 
         @keyframes float {
             from { transform: translateX(-200px); }
             to { transform: translateX(calc(100vw + 400px)); }
         }
 
-        /* UI設定 */
         #ui {
             position: absolute;
             top: 25px;
@@ -71,12 +58,7 @@
             font-size: 32px;
             font-weight: 900;
             color: #ff80ab;
-            text-shadow: 
-                3px 3px 0 #fff,
-                -1px -1px 0 #fff,  
-                1px -1px 0 #fff,
-                -1px 1px 0 #fff,
-                1px 1px 0 #fff;
+            text-shadow: 3px 3px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
         }
 
         #overlay {
@@ -89,13 +71,7 @@
             align-items: center;
             z-index: 10;
         }
-        h1 { 
-            color: #ff4081; 
-            font-size: 42px; 
-            margin-bottom: 5px;
-            text-shadow: 2px 2px white;
-            text-align: center;
-        }
+        h1 { color: #ff4081; font-size: 42px; text-align: center; text-shadow: 2px 2px white; }
         .score-info { font-size: 18px; margin-bottom: 30px; color: #555; text-align: center; }
         
         button {
@@ -115,8 +91,9 @@
 
         .shake { animation: shake 0.2s ease-in-out; }
         @keyframes shake {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(0.95); }
+            0%, 100% { transform: translate(0,0); }
+            25% { transform: translate(5px, 5px); }
+            75% { transform: translate(-5px, -5px); }
         }
     </style>
 </head>
@@ -135,7 +112,7 @@
 
     <div id="overlay">
         <h1>フルーツキャッチ♪</h1>
-        <p class="score-info">果物はのんびり、虫は早いよ！<br>ハエ（🪰）をよけてね！</p>
+        <p class="score-info">後半はハエが大量発生！？<br>最後まで逃げ切って！</p>
         <button id="startBtn">スタート！</button>
     </div>
 
@@ -154,7 +131,6 @@
         let timeLeft = 60;
         let gameActive = false;
         let items = [];
-        
         let basket = { x: 0, y: 0, w: 140, h: 70 };
 
         function resize() {
@@ -173,22 +149,28 @@
             if (basket.x < 0) basket.x = 0;
             if (basket.x > canvas.width - basket.w) basket.x = canvas.width - basket.w;
         }
-
         window.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, {passive: false});
         window.addEventListener('mousemove', handleMove);
 
         function spawnItem() {
             if (!gameActive) return;
-            const isBug = Math.random() < 0.15; // 虫の確率
+
+            // --- 難易度の計算 (0.0 から 1.0 に向かって増加) ---
+            const difficulty = (60 - timeLeft) / 60; 
+
+            // --- 虫の出現率を動的に変更 (15% から最大 45% まで) ---
+            const bugProbability = 0.15 + (difficulty * 0.30);
+            const isBug = Math.random() < bugProbability;
+            
             const fruits = ["🍎", "🍊", "🍇", "🍌", "🍓", "🍍", "🍉", "🍒", "🍑"];
             
             let itemSpeed;
             if (isBug) {
-                // --- 虫（ハエ）は素早く落ちる設定 ---
-                itemSpeed = 5.5 + Math.random() * 2 + (60 - timeLeft) / 10;
+                // 虫：終盤はめちゃくちゃ速くなる
+                itemSpeed = 5.5 + Math.random() * 2 + (difficulty * 10);
             } else {
-                // --- 果物はゆっくり落ちる設定 ---
-                itemSpeed = 2.5 + Math.random() * 2 + (60 - timeLeft) / 20;
+                // 果物：終盤も少し速くなる
+                itemSpeed = 2.5 + Math.random() * 2 + (difficulty * 4);
             }
 
             items.push({
@@ -199,7 +181,8 @@
                 speed: itemSpeed
             });
             
-            const nextSpawn = Math.max(350, 850 - (60 - timeLeft) * 5);
+            // --- 出現間隔を短くする (850ms から 最短 150ms まで) ---
+            const nextSpawn = Math.max(150, 850 - (difficulty * 800));
             setTimeout(spawnItem, nextSpawn);
         }
 
@@ -208,11 +191,15 @@
             for (let i = items.length - 1; i >= 0; i--) {
                 const item = items[i];
                 item.y += item.speed;
+
+                // 当たり判定
                 if (item.y + 30 > basket.y && item.y < basket.y + basket.h &&
                     item.x + 10 > basket.x && item.x < basket.x + basket.w - 10) {
+                    
                     if (item.type === 'fruit') {
                         score += 10;
                     } else {
+                        // 虫に当たった時のペナルティ
                         score = Math.max(0, score - 50);
                         document.body.classList.add('shake');
                         setTimeout(() => document.body.classList.remove('shake'), 200);
@@ -227,19 +214,25 @@
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // かご
+            
+            // かごの描画
             ctx.save();
             ctx.fillStyle = "#f06292"; 
             ctx.beginPath();
-            ctx.roundRect(basket.x, basket.y, basket.w, basket.h, 15);
+            if(ctx.roundRect) {
+                ctx.roundRect(basket.x, basket.y, basket.w, basket.h, 15);
+            } else {
+                ctx.rect(basket.x, basket.y, basket.w, basket.h);
+            }
             ctx.fill();
             ctx.fillStyle = "#e91e63";
             ctx.fillRect(basket.x - 5, basket.y - 5, basket.w + 10, 15);
             ctx.restore();
 
+            // アイテムの描画
             ctx.textAlign = "center";
+            ctx.font = "50px Arial";
             items.forEach(item => {
-                ctx.font = "50px Arial";
                 ctx.fillText(item.content, item.x + 30, item.y + 30);
             });
 
@@ -254,11 +247,21 @@
             if (!gameActive) return;
             timeLeft--;
             timeElement.innerText = timeLeft;
+
+            // 残り10秒でタイマーの色を変える演出
+            if (timeLeft <= 10) {
+                timeElement.style.color = "red";
+                timeElement.style.fontSize = "40px";
+            } else {
+                timeElement.style.color = "#ff80ab";
+                timeElement.style.fontSize = "32px";
+            }
+
             if (timeLeft <= 0) {
                 gameActive = false;
                 overlay.style.display = 'flex';
-                msg.innerHTML = "タイムアップ！<br><span style='font-size:30px'>スコア: " + score + "</span>";
-                startBtn.innerText = "もう一回！";
+                msg.innerHTML = "タイムアップ！<br><span style='font-size:30px'>最終スコア: " + score + "</span>";
+                startBtn.innerText = "もう一回挑戦！";
             } else {
                 setTimeout(timer, 1000);
             }
